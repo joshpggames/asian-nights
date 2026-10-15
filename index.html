@@ -78,6 +78,9 @@ input[aria-invalid=true]{border-color:var(--err)}
 .result.used,.result.unknown{background:var(--err);color:#fff}
 .result .big{font:900 34px/1.05 var(--font-label);text-transform:uppercase;margin:0}
 .result p{margin:0}
+.result .name{font-size:22px;font-weight:700}
+.result .msg{font:400 clamp(26px,7vw,34px)/1.15 "Kaushan Script",cursive;color:#fff;margin:6px 0}
+.result.in{padding:34px 18px}
 .tallies{display:flex;flex-wrap:wrap;gap:6px 20px;font-size:14px;color:var(--muted)}
 .tallies b{color:var(--ink);font-size:22px;margin-right:4px}
 .foot{text-align:center;font-size:13px;color:var(--muted);margin:0}
@@ -344,7 +347,7 @@ const BOOT = {
   function showResult(r) {
     const box = $('result'); box.className = 'result ' + r.status; box.textContent = '';
     const add = (tag, cls, txt) => { const n = document.createElement(tag); if (cls) n.className = cls; n.textContent = txt; box.appendChild(n); };
-    if (r.status === 'in') { add('p', 'big', 'Welcome'); add('p', '', r.holder); add('p', '', r.type + (r.host ? ' · guest of ' + r.host : '') + ' · checked in ' + r.at); }
+    if (r.status === 'in') { add('p', 'big', 'Welcome'); add('p', 'name', r.holder); add('p', 'msg', 'Enjoy the Christmas Party'); add('p', '', r.type + (r.host ? ' · guest of ' + r.host : '') + ' · checked in ' + r.at); }
     else if (r.status === 'used') { add('p', 'big', 'Already used'); add('p', '', r.holder + ' · ' + r.type); add('p', '', 'First scanned at ' + r.at); }
     else { add('p', 'big', 'Not found'); add('p', '', 'This code isn\'t on the guest list. Check it and try again.'); }
     box.hidden = false;
