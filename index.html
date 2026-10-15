@@ -170,36 +170,32 @@ input[aria-invalid=true]{border-color:var(--err)}
   <!-- Ticket -->
   <section id="v-ticket" hidden style="display:grid;gap:16px">
     <p class="notice info" id="t-loading">Loading your ticket…</p>
-    <section class="card" id="t-wait" hidden>
-      <h2>You're on the list</h2>
-      <p style="margin:0" id="t-wait-text"></p>
-      <p class="hint">Keep this link. Your QR ticket will appear here once tickets are released. We'll let you know in the WhatsApp group.</p>
+    <section class="card" id="t-save" hidden>
+      <h2 id="t-title">You're on the list</h2>
+      <p style="margin:0">Show this QR code at the door. Take a screenshot or save this page so you have it on the night. Each QR works once.</p>
+      <div class="row">
+        <button class="btn btn-plain" type="button" id="t-copy">Copy my ticket link</button>
+        <a class="btn btn-plain" id="t-wa" target="_blank" rel="noopener">Send to my WhatsApp</a>
+      </div>
+      <p class="hint" id="t-copy-note" hidden></p>
     </section>
     <div id="t-list" style="display:grid;gap:16px"></div>
-    <p class="hint" id="t-help" hidden style="text-align:center">Show this QR code at the door. Screenshots work too. Each code works once.</p>
     <p class="notice err" id="t-fail" hidden></p>
   </section>
 
   <!-- Door check-in -->
   <section id="v-door" hidden style="display:grid;gap:16px">
     <form class="card" id="door-pin" novalidate hidden>
-      <h2>Door check-in</h2>
-      <p style="margin:0" id="guest-scan-note" hidden>Guest? Show this QR code to the door team. This page is for door staff.</p>
-      <div class="field"><label for="pin">Door PIN</label><input type="password" id="pin" inputmode="numeric" autocomplete="off"></div>
-      <button class="btn btn-gold" type="submit">Start checking in</button>
+      <h2>Event team check-in</h2>
+      <p style="margin:0" id="guest-scan-note" hidden>Guests: this QR is for the event team to scan at the door.</p>
+      <p class="hint" style="font-size:14px">Event team: enter the team PIN once on this phone. After that, every QR you scan checks the guest in straight away.</p>
+      <div class="field"><label for="pin">Team PIN</label><input type="password" id="pin" inputmode="numeric" autocomplete="off"></div>
+      <button class="btn btn-gold" type="submit">Continue</button>
       <p class="notice err" id="pin-fail" role="alert" hidden></p>
     </form>
     <div id="door-main" hidden style="display:grid;gap:16px">
       <div class="result" id="result" hidden aria-live="assertive"></div>
-      <section class="card">
-        <h2>Check in a ticket</h2>
-        <p class="hint" style="font-size:14px">Scan the guest's QR code with your phone camera. It opens this page and checks them in. Or type the code.</p>
-        <form id="manual" novalidate style="display:grid;gap:10px">
-          <input type="text" id="manual-code" placeholder="PGX-7K4Q-9MDT" autocomplete="off" autocapitalize="characters" aria-label="Ticket code">
-          <button class="btn btn-gold" type="submit">Check in</button>
-        </form>
-        <div class="tallies"><span><b id="s-in">0</b>checked in</span><span><b id="s-total">0</b>guests expected</span></div>
-      </section>
+      <p class="hint" id="door-ready" style="text-align:center;font-size:14px">This phone is ready. Scan the next guest's QR code with your camera.</p>
     </div>
   </section>
 
@@ -264,7 +260,7 @@ const BOOT = {
         plusName: $('f-plus-name').value.trim(), dietary: $('f-diet').value.trim() });
       if (!r || !r.ok) throw new Error((r && r.error) || 'Your RSVP didn\'t send.');
       store.set('pg_xmas_token', r.token);
-      showDone(r.token, r.updated);
+      location.assign(ticketUrl(r.token));
     } catch (err) {
       $('rsvp-fail').textContent = (err && err.message) || 'Your RSVP didn\'t send. Check your connection and try again.';
       $('rsvp-fail').hidden = false;
@@ -303,8 +299,7 @@ const BOOT = {
       const r = await call('findTicket', $('l-phone').value, $('l-email').value);
       if (!r || !r.ok) throw new Error((r && r.error) || 'Something went wrong.');
       store.set('pg_xmas_token', r.token);
-      showDone(r.token, false);
-      $('done-title').textContent = 'Found you, ' + String(r.name).split(' ')[0];
+      location.assign(ticketUrl(r.token));
     } catch (err) { $('find-fail').textContent = err.message; $('find-fail').hidden = false; }
     finally { btn.disabled = false; btn.textContent = 'Find my ticket'; }
   });
@@ -318,12 +313,16 @@ const BOOT = {
       $('t-loading').hidden = true;
       if (!r || !r.ok) throw new Error((r && r.error) || 'We couldn\'t load your ticket.');
       store.set('pg_xmas_token', token);
-      if (!r.released) {
-        $('t-wait-text').textContent = r.name + (r.plusOne ? ' plus ' + (r.plusName || 'one guest') : '') + ', your RSVP is confirmed.';
-        $('t-wait').hidden = false;
-        return;
-      }
-      $('t-help').hidden = false;
+      const url = ticketUrl(token);
+      $('t-title').textContent = 'You\'re on the list, ' + String(r.name).split(' ')[0];
+      $('t-wa').href = 'https://wa.me/?text=' + encodeURIComponent('My Asian Nights Christmas Party ticket: ' + url);
+      $('t-copy').onclick = async () => {
+        const note = $('t-copy-note');
+        try { await navigator.clipboard.writeText(url); note.textContent = 'Link copied.'; }
+        catch (e) { note.textContent = url; }
+        note.hidden = false;
+      };
+      $('t-save').hidden = false;
       r.tickets.forEach((t) => {
         const el = document.createElement('article');
         el.className = 'ticket' + (t.usedAt ? ' spent' : '');
@@ -343,15 +342,13 @@ const BOOT = {
 
   // ----- Door -----
   let pin = store.get('pg_xmas_pin') || '';
-  function setStats(s) { if (!s) return; $('s-in').textContent = s.checkedIn; $('s-total').textContent = s.guests; }
   function showResult(r) {
     const box = $('result'); box.className = 'result ' + r.status; box.textContent = '';
     const add = (tag, cls, txt) => { const n = document.createElement(tag); if (cls) n.className = cls; n.textContent = txt; box.appendChild(n); };
-    if (r.status === 'in') { add('p', 'big', 'Welcome'); add('p', 'name', r.holder); add('p', 'msg', 'Enjoy the Christmas Party'); add('p', '', r.type + (r.host ? ' · guest of ' + r.host : '') + ' · checked in ' + r.at); }
-    else if (r.status === 'used') { add('p', 'big', 'Already used'); add('p', '', r.holder + ' · ' + r.type); add('p', '', 'First scanned at ' + r.at); }
-    else { add('p', 'big', 'Not found'); add('p', '', 'This code isn\'t on the guest list. Check it and try again.'); }
+    if (r.status === 'in') { add('p', 'big', 'Checked in'); add('p', 'name', r.holder); add('p', 'msg', 'Welcome, enjoy the Christmas Party'); add('p', '', r.type + (r.host ? ' · guest of ' + r.host : '') + ' · ' + r.at); }
+    else if (r.status === 'used') { add('p', 'big', 'Already checked in'); add('p', 'name', r.holder); add('p', '', r.type + ' · checked in at ' + r.at); }
+    else { add('p', 'big', 'Ticket not recognised'); add('p', '', 'Ask the guest to open their ticket link again.'); }
     box.hidden = false;
-    setStats(r.stats);
   }
   async function doCheckIn(code) {
     try {
@@ -362,16 +359,17 @@ const BOOT = {
   }
   async function startDoor() {
     show('v-door');
-    $('lede').textContent = 'Door check-in.';
+    $('lede').textContent = 'Event team check-in.';
+    document.querySelector('.details').hidden = true;
     if (BOOT.code) $('guest-scan-note').hidden = false;
     if (pin) {
       const r = await call('doorLogin', pin).catch(() => null);
-      if (r && r.ok) return enterDoor(r.stats);
+      if (r && r.ok) return enterDoor();
     }
     $('door-pin').hidden = false;
   }
-  function enterDoor(stats) {
-    $('door-pin').hidden = true; $('door-main').hidden = false; setStats(stats);
+  function enterDoor() {
+    $('door-pin').hidden = true; $('door-main').hidden = false;
     if (BOOT.code) doCheckIn(BOOT.code);
   }
   $('door-pin').addEventListener('submit', async (e) => {
@@ -379,14 +377,7 @@ const BOOT = {
     const p = $('pin').value.trim();
     const r = await call('doorLogin', p).catch(() => ({ ok: false, error: 'Couldn\'t reach the guest list.' }));
     if (!r.ok) { $('pin-fail').textContent = r.error; $('pin-fail').hidden = false; return; }
-    pin = p; store.set('pg_xmas_pin', p); enterDoor(r.stats);
-  });
-  $('manual').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const c = $('manual-code').value.trim();
-    if (!c) return;
-    $('manual-code').value = '';
-    doCheckIn(c);
+    pin = p; store.set('pg_xmas_pin', p); enterDoor();
   });
 
   // ----- Route -----
