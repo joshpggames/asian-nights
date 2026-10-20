@@ -130,8 +130,9 @@ input[aria-invalid=true]{border-color:var(--err)}
   <form class="card" id="v-rsvp" novalidate hidden>
     <h2>Your RSVP</h2>
     <p class="notice info" id="rsvp-by" hidden></p>
-    <div class="field"><label for="f-name">Full name</label>
+    <div class="field"><label for="f-name">Employee name</label>
       <input type="text" id="f-name" autocomplete="name" placeholder="Tamika Rolle">
+      <p class="hint">Your full name as a Paradise Games employee.</p>
       <p class="error" id="e-name" hidden>Enter your full name.</p></div>
     <div class="field"><label for="f-phone">Phone number</label>
       <input type="tel" id="f-phone" autocomplete="tel" inputmode="tel" placeholder="(242) 555-0123">
@@ -145,8 +146,9 @@ input[aria-invalid=true]{border-color:var(--err)}
         <label class="choice"><input type="radio" name="plus" id="f-plus-no" value="no" checked><span>Just me</span></label>
         <label class="choice"><input type="radio" name="plus" id="f-plus-yes" value="yes"><span>Plus one</span></label>
       </div></fieldset>
-    <div class="field" id="plus-field" hidden><label for="f-plus-name">Plus one's name <span class="opt">(optional)</span></label>
-      <input type="text" id="f-plus-name" autocomplete="off" placeholder="Their full name"></div>
+    <div class="field" id="plus-field" hidden><label for="f-plus-name">Plus one's full name</label>
+      <input type="text" id="f-plus-name" autocomplete="off" placeholder="Their full name">
+      <p class="error" id="e-plus" hidden>Enter your plus one's full name.</p></div>
     <div class="field"><label for="f-diet">Dietary requirements or allergies <span class="opt">(optional)</span></label>
       <textarea id="f-diet" rows="3" maxlength="500" placeholder="Vegetarian, no shellfish, nut allergy"></textarea>
       <p class="hint">Include your plus one's needs too, if they have any.</p></div>
@@ -243,7 +245,7 @@ const BOOT = {
   token: Q.get('t') || '', code: Q.get('code') || '',
   url: location.origin + location.pathname, rsvpOpen: true, released: false,
   event: { title: 'Asian Nights', tagline: 'A culinary journey across Asia', date: 'Sun. 13 Dec 2026',
-    timeLabel: 'Departure (time)', time: '7:00 PM', venue: 'Cru @ Bristol', dressCode: 'Smart casual / Asian chic', rsvpBy: '' }
+    timeLabel: 'Starts', time: '7:00 PM', venue: 'Cru @ Bristol', dressCode: 'Smart casual / Asian chic', rsvpBy: '' }
 };
 (function () {
   const $ = (id) => document.getElementById(id);
@@ -275,7 +277,7 @@ const BOOT = {
   const plusYes = $('f-plus-yes'), plusNo = $('f-plus-no');
   const syncPlus = () => { $('plus-field').hidden = !plusYes.checked; };
   plusYes.addEventListener('change', syncPlus); plusNo.addEventListener('change', syncPlus);
-  [['f-name', 'e-name'], ['f-phone', 'e-phone'], ['f-email', 'e-email']].forEach(([i, e]) =>
+  [['f-name', 'e-name'], ['f-phone', 'e-phone'], ['f-email', 'e-email'], ['f-plus-name', 'e-plus']].forEach(([i, e]) =>
     $(i).addEventListener('input', () => { $(e).hidden = true; $(i).removeAttribute('aria-invalid'); }));
 
   $('v-rsvp').addEventListener('submit', async (e) => {
@@ -283,14 +285,15 @@ const BOOT = {
     $('rsvp-fail').hidden = true;
     const name = $('f-name').value.trim(), phone = $('f-phone').value.trim(), email = $('f-email').value.trim();
     const checks = [['f-name', 'e-name', name.length >= 2], ['f-phone', 'e-phone', phone.replace(/\D/g, '').length >= 7],
-      ['f-email', 'e-email', /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)]];
+      ['f-email', 'e-email', /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)],
+      ['f-plus-name', 'e-plus', !plusYes.checked || $('f-plus-name').value.trim().length >= 2]];
     let first = null;
     checks.forEach(([i, er, ok]) => { $(i).setAttribute('aria-invalid', ok ? 'false' : 'true'); $(er).hidden = ok; if (!ok && !first) first = $(i); });
     if (first) { first.focus(); return; }
     const btn = $('send'); btn.disabled = true; btn.textContent = 'Sending…';
     try {
       const r = await call('submitRsvp', { name, phone, email, plusOne: plusYes.checked,
-        plusName: $('f-plus-name').value.trim(), dietary: $('f-diet').value.trim() });
+        plusName: plusYes.checked ? $('f-plus-name').value.trim() : '', dietary: $('f-diet').value.trim() });
       if (!r || !r.ok) throw new Error((r && r.error) || 'Your RSVP didn\'t send.');
       store.set('pg_xmas_token', r.token);
       location.assign(ticketUrl(r.token));
